@@ -633,7 +633,7 @@ main {
 
 .play-card__footer {
   display: grid;
-  grid-template-columns: auto minmax(120px, 250px) 1fr;
+  grid-template-columns: auto 1fr;
   align-items: center;
   gap: 16px;
   margin-top: 34px;
@@ -659,20 +659,6 @@ main {
   color: #ffad9f;
 }
 
-.level-progress {
-  height: 5px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.level-progress span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: #73d7b4;
-  transition: width 280ms ease;
-}
 
 .spinner {
   width: 18px;
@@ -1618,10 +1604,6 @@ main {
 
   .play-card__footer {
     grid-template-columns: 1fr;
-  }
-
-  .level-progress {
-    width: 100%;
   }
 
   .workspace {

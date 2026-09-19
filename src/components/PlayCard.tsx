@@ -8,7 +8,6 @@ interface PlayCardProps {
   velocities: number[]
   difficulty: number
   attempts: number
-  correct: number
   ruleSummary: string
   audioError: string | null
   onPlay: () => void
@@ -24,13 +23,11 @@ export function PlayCard({
   velocities,
   difficulty,
   attempts,
-  correct,
   ruleSummary,
   audioError,
   onPlay,
 }: PlayCardProps) {
   const loadingProgress = total > 0 ? Math.round((loaded / total) * 100) : 0
-  const accuracy = attempts > 0 ? Math.round((correct / attempts) * 100) : 0
   const bars = velocities.length > 0 ? velocities : IDLE_BARS
   const buttonLabel =
     audioStatus === 'idle' ? '启动并播放' : audioStatus === 'loading' ? `加载 ${loadingProgress}%` : '重新播放'
@@ -95,15 +92,12 @@ export function PlayCard({
           <span className="eyebrow">无限随机题池</span>
           <strong>已答 {attempts} 题</strong>
         </div>
-        <div className="level-progress" aria-label={`当前难度正确率 ${accuracy}%`}>
-          <span style={{ width: `${accuracy}%` }} />
-        </div>
         <p className={audioError ? 'is-error' : ''}>
           {audioError
             ? `音频加载失败：${audioError}`
             : audioStatus === 'idle'
               ? '首次播放需要点击一次以启用浏览器音频'
-              : `当前难度正确率 ${accuracy}% · 每次播放都会重新随机力度`}
+              : '每次播放都会重新随机每个音的力度'}
         </p>
       </div>
     </section>

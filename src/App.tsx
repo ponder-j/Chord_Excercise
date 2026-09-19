@@ -379,7 +379,6 @@ function App() {
           velocities={audioState.velocities}
           difficulty={store.settings.level}
           attempts={progress.attempts}
-          correct={progress.correct}
           ruleSummary={levelDefinition.description}
           audioError={audioState.error}
           onPlay={handlePlayQuestion}
