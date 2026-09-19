@@ -17,6 +17,7 @@ const DIATONIC_SEVENTHS: Record<KeyMode, string[]> = {
 }
 export const TARGET_MIN_MIDI = 48
 export const TARGET_MAX_MIDI = 83
+export const CURRENT_DIFFICULTY_WEIGHT = 0.6
 
 const MODIFIER_INTERVALS: Record<number, number> = {
   1: 12,
@@ -162,8 +163,34 @@ export function getChordNoteNames(midiNotes: number[], useFlats: boolean) {
 }
 
 export function getQualityCardsForLevel(level: number) {
-  const definition = getLevelDefinition(level)
-  return definition.qualityIds.map((qualityId) => getQuality(qualityId))
+  const qualityIds = new Set<string>()
+  for (let currentLevel = 1; currentLevel <= level; currentLevel += 1) {
+    getLevelDefinition(currentLevel).qualityIds.forEach((qualityId) => qualityIds.add(qualityId))
+  }
+  return [...qualityIds].map((qualityId) => getQuality(qualityId))
+}
+
+export function getDifficultyPoolWeights(level: number) {
+  if (level <= 1) return [{ level: 1, weight: 1 }]
+  const lowerLevels = Array.from({ length: level - 1 }, (_, index) => index + 1)
+  const lowerWeight = (1 - CURRENT_DIFFICULTY_WEIGHT) / lowerLevels.length
+  return [
+    { level, weight: CURRENT_DIFFICULTY_WEIGHT },
+    ...lowerLevels.map((lowerLevel) => ({ level: lowerLevel, weight: lowerWeight })),
+  ]
+}
+
+function pickDifficultyPool(level: number) {
+  const weights = getDifficultyPoolWeights(level)
+  const roll = Math.random()
+  let cumulative = 0
+
+  for (const item of weights) {
+    cumulative += item.weight
+    if (roll < cumulative) return item.level
+  }
+
+  return level
 }
 
 export function getAllQualities() {
@@ -207,11 +234,11 @@ export function applyChordIntervals(baseIntervals: number[], modifiers: AnswerMo
 }
 
 export function generateQuestion(level: number, keyRoot: number, mode: KeyMode): ChordQuestion {
-  const definition = getLevelDefinition(level)
-
   for (let attempt = 0; attempt < 80; attempt += 1) {
+    const poolLevel = pickDifficultyPool(level)
+    const definition = getLevelDefinition(poolLevel)
     const diatonic = definition.diatonicOnly
-      ? (getLevelDiatonicQualities(level, mode).filter((item) => definition.qualityIds.includes(item.qualityId)))
+      ? (getLevelDiatonicQualities(poolLevel, mode).filter((item) => definition.qualityIds.includes(item.qualityId)))
       : null
     const picked = diatonic && diatonic.length > 0
       ? diatonic[randomInt(0, diatonic.length - 1)]

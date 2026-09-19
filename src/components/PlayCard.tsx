@@ -51,7 +51,7 @@ export function PlayCard({
           <p className="play-card__kicker">听音辨和弦</p>
           <h1>找出级数与和弦色彩</h1>
           <p className="play-card__description">
-            每个音的力度已随机化排布。当前难度按“{ruleSummary}”持续生成新题，题池没有上限。
+            每个音的力度已随机化排布。当前难度按“{ruleSummary}”持续生成新题，题池没有上限；更高难度会继续复用到这些问题模型。
           </p>
         </div>
 

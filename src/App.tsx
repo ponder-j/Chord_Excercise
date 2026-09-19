@@ -391,7 +391,7 @@ function App() {
               <span className="eyebrow">Your answer</span>
               <h2>组合你的答案</h2>
               <p>
-                {keyLabel} · {levelDefinition.description}
+                {keyLabel} · {levelDefinition.description} · {store.settings.level === 1 ? '本级题池 100%' : '本级 60% + 历史难度 40%'}
               </p>
             </div>
             <div className="workspace__meta">
