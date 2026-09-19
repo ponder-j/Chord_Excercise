@@ -3,6 +3,7 @@ import { KeyPicker } from './components/KeyPicker'
 import { PlayCard } from './components/PlayCard'
 import { AnswerPanels } from './components/AnswerPanels'
 import { MistakeBook } from './components/MistakeBook'
+import { AnswerComparison } from './components/AnswerComparison'
 import { pianoEngine } from './audio/piano'
 import { LEVELS, getLevelDefinition } from './data/levels'
 import {
@@ -460,6 +461,15 @@ function App() {
                 </button>
               )}
             </div>
+          )}
+
+          {feedback && selectedAnswer && (
+            <AnswerComparison
+              mineMidi={selectedMidi}
+              standardMidi={question.midiNotes}
+              keyRoot={question.keyRoot}
+              mode={question.keyMode}
+            />
           )}
 
           <div className="submit-row">

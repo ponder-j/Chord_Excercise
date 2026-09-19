@@ -182,6 +182,15 @@ export function getChordNoteNames(midiNotes: number[], useFlats: boolean) {
   return midiNotes.map((midi) => midiToPitchName(midi, useFlats))
 }
 
+export function shouldUseFlatsForKey(keyRoot: number, mode: KeyMode) {
+  if (mode === 'major') return KEY_ROOTS.find((root) => root.pitchClass === keyRoot)?.useFlats ?? false
+  return [0, 1, 2, 3, 5, 7, 8, 10].includes(keyRoot)
+}
+
+export function getAbsoluteNoteName(midi: number, keyRoot: number, mode: KeyMode) {
+  return midiToPitchName(midi, shouldUseFlatsForKey(keyRoot, mode))
+}
+
 export function getQualityCardsForLevel(level: number) {
   const qualityIds = new Set<string>()
   for (let currentLevel = 1; currentLevel <= level; currentLevel += 1) {
