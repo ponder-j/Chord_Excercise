@@ -12,10 +12,11 @@ import {
   formatKeyLabel,
   generateQuestion,
   getDegreePitchName,
+  getDifficultyPoolWeights,
+  getQualityCardsForLevel,
   modifierKey,
   normalizeAnswer,
-  sameChordSound,
-  getQualityCardsForLevel,
+  sameAnswer,
   sortModifiers,
   uniqueId,
 } from './music'
@@ -23,6 +24,7 @@ import {
   appendAttempt,
   appendMistake,
   clearMistakes,
+  getUnlockState,
   loadStore,
   saveStore,
 } from './storage'
@@ -32,10 +34,11 @@ import type {
   AttemptRecord,
   AudioStatus,
   ChordAnswer,
-  ChordQuestion,
   KeyMode,
   MistakeRecord,
   ModifierKind,
+  QuestionAnswer,
+  TrainingQuestion,
 } from './types'
 
 type Feedback =
@@ -45,11 +48,6 @@ type Feedback =
     }
   | {
       type: 'wrong'
-      message: string
-      targetLabel: string
-    }
-  | {
-      type: 'revealed'
       targetLabel: string
     }
 
@@ -62,9 +60,17 @@ interface AudioViewState {
   velocities: number[]
 }
 
+interface UnlockNotice {
+  level: number
+  previousLevel: number
+  attempts: number
+  recentCorrect: number
+  recentCount: number
+}
+
 function createAttempt(
-  question: ChordQuestion,
-  selected: ChordAnswer | null,
+  question: TrainingQuestion,
+  selected: QuestionAnswer | null,
   selectedMidi: number[],
   correct: boolean,
   keyLabel: string,
@@ -73,6 +79,7 @@ function createAttempt(
     id: uniqueId('attempt'),
     timestamp: Date.now(),
     correct,
+    taskKind: question.taskKind,
     level: question.level,
     keyRoot: question.keyRoot,
     keyMode: question.keyMode,
@@ -86,17 +93,17 @@ function createAttempt(
 
 function App() {
   const [store, setStore] = useState<AppStore>(() => loadStore())
-  const [question, setQuestion] = useState<ChordQuestion>(() =>
+  const [question, setQuestion] = useState<TrainingQuestion>(() =>
     generateQuestion(store.settings.level, store.settings.keyRoot, store.settings.keyMode),
   )
-  const [degree, setDegree] = useState<number | null>(null)
+  const [selectedDegrees, setSelectedDegrees] = useState<number[]>([])
   const [qualityId, setQualityId] = useState<string | null>(null)
   const [modifiers, setModifiers] = useState<AnswerModifier[]>([])
   const [modifierKind, setModifierKind] = useState<ModifierKind>('add')
   const [feedback, setFeedback] = useState<Feedback | null>(null)
-  const [questionWrongCount, setQuestionWrongCount] = useState(0)
   const [keyPickerOpen, setKeyPickerOpen] = useState(false)
   const [mistakesOpen, setMistakesOpen] = useState(false)
+  const [unlockNotice, setUnlockNotice] = useState<UnlockNotice | null>(null)
   const [audioState, setAudioState] = useState<AudioViewState>({
     status: 'idle',
     loaded: 0,
@@ -108,11 +115,13 @@ function App() {
   const playedQuestionRef = useRef<string | null>(null)
 
   const levelDefinition = getLevelDefinition(store.settings.level)
+  const taskKind = levelDefinition.taskKind
   const progress = store.progress[store.settings.level] ?? {
     attempts: 0,
     correct: 0,
     bestStreak: 0,
     currentStreak: 0,
+    recent: [],
   }
   const qualityCards = useMemo(() => getQualityCardsForLevel(store.settings.level), [store.settings.level])
   const degreeNames = useMemo(
@@ -123,22 +132,32 @@ function App() {
     [store.settings.keyMode, store.settings.keyRoot],
   )
 
-  const selectedAnswer = useMemo<ChordAnswer | null>(() => {
-    if (degree === null || qualityId === null) return null
-    return normalizeAnswer({ degree, qualityId, modifiers })
-  }, [degree, modifiers, qualityId])
+  const selectedAnswer = useMemo<QuestionAnswer | null>(() => {
+    if (taskKind === 'chord') {
+      if (selectedDegrees.length !== 1 || qualityId === null) return null
+      return normalizeAnswer({ degree: selectedDegrees[0], qualityId, modifiers })
+    }
 
+    const requiredCount = taskKind === 'note' ? 1 : 2
+    if (selectedDegrees.length !== requiredCount) return null
+    return { degrees: [...selectedDegrees].sort((a, b) => a - b) }
+  }, [modifiers, qualityId, selectedDegrees, taskKind])
+
+  const selectedChord = taskKind === 'chord' ? (selectedAnswer as ChordAnswer | null) : null
   const selectedMidi = useMemo(
     () =>
       selectedAnswer
-        ? answerToMidi(selectedAnswer, store.settings.keyRoot, store.settings.keyMode)
+        ? answerToMidi(selectedAnswer, store.settings.keyRoot, store.settings.keyMode, question.taskKind)
         : [],
-    [selectedAnswer, store.settings.keyMode, store.settings.keyRoot],
+    [question.taskKind, selectedAnswer, store.settings.keyMode, store.settings.keyRoot],
   )
 
   const keyLabel = formatKeyLabel(store.settings.keyRoot, store.settings.keyMode)
-  const selectedLabel = selectedAnswer ? answerToLabel(selectedAnswer) : '等待你组合答案'
-  const allowModifiers = levelDefinition.modifiers.length > 0
+  const selectedLabel = selectedAnswer ? answerToLabel(selectedAnswer, taskKind) : '等待你组合答案'
+  const allowModifiers = taskKind === 'chord' && levelDefinition.modifiers.length > 0
+  const poolWeights = getDifficultyPoolWeights(store.settings.level)
+  const poolSummary = poolWeights.length === 1 ? '本级题池 100%' : '本级 60% + 历史和弦题池 40%'
+  const isLockedFeedback = feedback !== null
 
   useEffect(() => saveStore(store), [store])
 
@@ -156,14 +175,13 @@ function App() {
   }, [audioState.status, question])
 
   function resetAnswer() {
-    setDegree(null)
+    setSelectedDegrees([])
     setQualityId(null)
     setModifiers([])
     setFeedback(null)
-    setQuestionWrongCount(0)
   }
 
-  function loadQuestion(nextQuestion: ChordQuestion) {
+  function loadQuestion(nextQuestion: TrainingQuestion) {
     playedQuestionRef.current = null
     setQuestion(nextQuestion)
     resetAnswer()
@@ -192,6 +210,19 @@ function App() {
   }
 
   function handleLevelChange(nextLevel: number) {
+    const unlock = getUnlockState(store, nextLevel)
+    if (!unlock.unlocked) {
+      setUnlockNotice({
+        level: nextLevel,
+        previousLevel: unlock.previousLevel,
+        attempts: unlock.attempts,
+        recentCorrect: unlock.recentCorrect,
+        recentCount: unlock.recentCount,
+      })
+      return
+    }
+
+    setUnlockNotice(null)
     setStore((current) => ({
       ...current,
       settings: { ...current.settings, level: nextLevel },
@@ -226,20 +257,27 @@ function App() {
   }
 
   function handleSelectDegree(value: number) {
-    if (feedback?.type === 'correct' || feedback?.type === 'revealed') return
-    setDegree(value)
-    setFeedback(null)
+    if (isLockedFeedback) return
+
+    if (taskKind === 'dyad') {
+      setSelectedDegrees((current) => {
+        if (current.includes(value)) return current.filter((degree) => degree !== value)
+        if (current.length >= 2) return current
+        return [...current, value].sort((a, b) => a - b)
+      })
+      return
+    }
+
+    setSelectedDegrees([value])
   }
 
   function handleSelectQuality(value: string) {
-    if (feedback?.type === 'correct' || feedback?.type === 'revealed') return
+    if (isLockedFeedback || taskKind !== 'chord') return
     setQualityId(value)
-    setFeedback(null)
   }
 
   function handleToggleModifier(modifier: AnswerModifier) {
-    if (feedback?.type === 'correct' || feedback?.type === 'revealed') return
-    setFeedback(null)
+    if (isLockedFeedback || taskKind !== 'chord') return
     setModifiers((current) => {
       const key = modifierKey(modifier)
       const exists = current.some((item) => modifierKey(item) === key)
@@ -249,22 +287,30 @@ function App() {
   }
 
   function handleRemoveModifier(modifier: AnswerModifier) {
-    if (feedback?.type === 'correct' || feedback?.type === 'revealed') return
+    if (isLockedFeedback || taskKind !== 'chord') return
     setModifiers((current) => current.filter((item) => modifierKey(item) !== modifierKey(modifier)))
-    setFeedback(null)
   }
 
   function handleSubmit() {
-    if (!selectedAnswer || feedback?.type === 'correct' || feedback?.type === 'revealed') return
+    if (!selectedAnswer || isLockedFeedback) return
 
-    const correct = sameChordSound(selectedAnswer, question.answer, question.keyRoot, question.keyMode)
+    const correct = sameAnswer(
+      selectedAnswer,
+      question.answer,
+      question.keyRoot,
+      question.keyMode,
+      question.taskKind,
+    )
     const attempt = createAttempt(question, selectedAnswer, selectedMidi, correct, keyLabel)
+
     setStore((current) => {
       const withAttempt = appendAttempt(current, attempt)
       if (correct) return withAttempt
+
       const mistake: MistakeRecord = {
         id: attempt.id,
         timestamp: attempt.timestamp,
+        taskKind: attempt.taskKind,
         level: attempt.level,
         keyRoot: attempt.keyRoot,
         keyMode: attempt.keyMode,
@@ -277,26 +323,9 @@ function App() {
       return appendMistake(withAttempt, mistake)
     })
 
-    if (correct) {
-      setFeedback({
-        type: 'correct',
-        targetLabel: answerToLabel(question.answer),
-      })
-      setQuestionWrongCount(0)
-    } else {
-      setQuestionWrongCount((count) => count + 1)
-      setFeedback({
-        type: 'wrong',
-        message: '还差一点，试着先确定根音，再听三音、五音和延伸音。',
-        targetLabel: answerToLabel(question.answer),
-      })
-    }
-  }
-
-  function handleReveal() {
     setFeedback({
-      type: 'revealed',
-      targetLabel: answerToLabel(question.answer),
+      type: correct ? 'correct' : 'wrong',
+      targetLabel: answerToLabel(question.answer, question.taskKind),
     })
   }
 
@@ -310,7 +339,12 @@ function App() {
   }
 
   const hasAnswer = Boolean(selectedAnswer)
-  const isLockedFeedback = feedback?.type === 'correct' || feedback?.type === 'revealed'
+  const answerHint =
+    taskKind === 'note'
+      ? '请选择 1 个级数'
+      : taskKind === 'dyad'
+        ? `请选择 2 个级数（已选 ${selectedDegrees.length}/2）`
+        : '先选择级数和和弦性质'
 
   return (
     <div className="app-shell">
@@ -350,19 +384,26 @@ function App() {
         <section className="level-strip" aria-label="训练难度">
           <div className="level-strip__intro">
             <span className="eyebrow">Difficulty rules</span>
-            <strong>选择一组随机出题规则</strong>
+            <strong>逐层解锁，高阶包含历史和弦题池</strong>
           </div>
           <div className="level-list">
             {LEVELS.map((level) => {
               const itemProgress = store.progress[level.id]
-              const accuracy = itemProgress?.attempts ? Math.round((itemProgress.correct / itemProgress.attempts) * 100) : null
+              const accuracy = itemProgress?.attempts
+                ? Math.round((itemProgress.correct / itemProgress.attempts) * 100)
+                : null
+              const unlock = getUnlockState(store, level.id)
+
               return (
                 <button
                   key={level.id}
                   type="button"
-                  className={`level-card ${store.settings.level === level.id ? 'is-current' : ''}`}
+                  className={`level-card ${store.settings.level === level.id ? 'is-current' : ''} ${
+                    !unlock.unlocked ? 'is-locked' : ''
+                  }`}
                   onClick={() => handleLevelChange(level.id)}
-                  title={level.description}
+                  aria-disabled={!unlock.unlocked}
+                  title={unlock.unlocked ? level.description : '完成上一层的前置要求后解锁'}
                 >
                   <span className="level-card__number">0{level.id}</span>
                   <span className="level-card__copy">
@@ -370,13 +411,32 @@ function App() {
                     <small>{level.short}</small>
                   </span>
                   <span className="level-card__progress">
-                    {accuracy === null ? '∞' : `${accuracy}%`}
+                    {unlock.unlocked ? (accuracy === null ? '∞' : `${accuracy}%`) : '🔒'}
                   </span>
                 </button>
               )
             })}
           </div>
         </section>
+
+        {unlockNotice && (
+          <section className="unlock-notice" role="status">
+            <div>
+              <strong>难度 0{unlockNotice.level} 尚未解锁</strong>
+              <p>
+                请回到难度 0{unlockNotice.previousLevel}：至少完成 20 题，且最近 20 题正确率不低于 90%。
+                当前已答 {unlockNotice.attempts} 题，最近 {unlockNotice.recentCount} 题正确{' '}
+                {unlockNotice.recentCorrect} 题。
+              </p>
+            </div>
+            <button type="button" onClick={() => handleLevelChange(unlockNotice.previousLevel)}>
+              去练难度 0{unlockNotice.previousLevel}
+            </button>
+            <button type="button" className="unlock-notice__close" onClick={() => setUnlockNotice(null)} aria-label="关闭提示">
+              ×
+            </button>
+          </section>
+        )}
 
         <PlayCard
           playing={audioState.playing}
@@ -386,6 +446,7 @@ function App() {
           velocities={audioState.velocities}
           difficulty={store.settings.level}
           attempts={progress.attempts}
+          taskKind={taskKind}
           ruleSummary={levelDefinition.description}
           audioError={audioState.error}
           onPlay={handlePlayQuestion}
@@ -397,7 +458,7 @@ function App() {
               <span className="eyebrow">Your answer</span>
               <h2>组合你的答案</h2>
               <p>
-                {keyLabel} · {levelDefinition.description} · {store.settings.level === 1 ? '本级题池 100%' : '本级 60% + 历史难度 40%'}
+                {keyLabel} · {levelDefinition.description} · {poolSummary}
               </p>
             </div>
             <div className="workspace__meta">
@@ -410,9 +471,12 @@ function App() {
             <div className="answer-tray__main">
               <span className="eyebrow">当前组合</span>
               <strong>{selectedLabel}</strong>
-              {selectedAnswer && (
+              {taskKind === 'dyad' && selectedDegrees.length < 2 && (
+                <span className="answer-tray__hint">再选 {2 - selectedDegrees.length} 个级数</span>
+              )}
+              {selectedChord && selectedChord.modifiers.length > 0 && (
                 <div className="answer-tray__mods">
-                  {selectedAnswer.modifiers.map((modifier) => (
+                  {selectedChord.modifiers.map((modifier) => (
                     <button
                       type="button"
                       key={modifierKey(modifier)}
@@ -433,33 +497,14 @@ function App() {
 
           {feedback && (
             <div className={`feedback feedback--${feedback.type}`}>
-              <div className="feedback__icon">{feedback.type === 'correct' ? '✓' : feedback.type === 'wrong' ? '!' : 'i'}</div>
+              <div className="feedback__icon">{feedback.type === 'correct' ? '✓' : '!'}</div>
               <div className="feedback__copy">
-                <strong>
-                  {feedback.type === 'correct'
-                    ? '回答正确'
-                    : feedback.type === 'revealed'
-                      ? '正确答案'
-                      : feedback.message}
-                </strong>
-                {feedback.type === 'correct' && <span>继续把听觉记忆变成稳定判断。</span>}
-                {feedback.type !== 'correct' && <span>{feedback.targetLabel}</span>}
+                <strong>{feedback.type === 'correct' ? '回答正确' : '回答错误，本题已结束'}</strong>
+                <span>{feedback.targetLabel}</span>
               </div>
-              {feedback.type === 'wrong' && questionWrongCount >= 2 && (
-                <button type="button" className="feedback__reveal" onClick={handleReveal}>
-                  看答案
-                </button>
-              )}
-              {feedback.type === 'correct' && (
-                <button type="button" className="feedback__next" onClick={handleNext}>
-                  下一题
-                </button>
-              )}
-              {feedback.type === 'revealed' && (
-                <button type="button" className="feedback__next" onClick={handleNext}>
-                  下一题
-                </button>
-              )}
+              <button type="button" className="feedback__next" onClick={handleNext}>
+                下一题
+              </button>
             </div>
           )}
 
@@ -473,7 +518,7 @@ function App() {
           )}
 
           <div className="submit-row">
-            <p>{hasAnswer ? '可先试听自己组合的音响，再提交答案' : '先选择级数和和弦性质'}</p>
+            <p>{hasAnswer ? '可先试听自己组合的音响，再提交答案' : answerHint}</p>
             <div className="submit-actions">
               <button
                 type="button"
@@ -498,7 +543,8 @@ function App() {
           </div>
 
           <AnswerPanels
-            degree={degree}
+            taskKind={taskKind}
+            selectedDegrees={selectedDegrees}
             qualityId={qualityId}
             qualityCards={qualityCards}
             degreeNames={degreeNames}

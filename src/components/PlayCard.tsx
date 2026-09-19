@@ -1,4 +1,4 @@
-import type { AudioStatus } from '../types'
+import type { AudioStatus, TaskKind } from '../types'
 
 interface PlayCardProps {
   playing: boolean
@@ -8,6 +8,7 @@ interface PlayCardProps {
   velocities: number[]
   difficulty: number
   attempts: number
+  taskKind: TaskKind
   ruleSummary: string
   audioError: string | null
   onPlay: () => void
@@ -23,6 +24,7 @@ export function PlayCard({
   velocities,
   difficulty,
   attempts,
+  taskKind,
   ruleSummary,
   audioError,
   onPlay,
@@ -31,6 +33,7 @@ export function PlayCard({
   const bars = velocities.length > 0 ? velocities : IDLE_BARS
   const buttonLabel =
     audioStatus === 'idle' ? '启动并播放' : audioStatus === 'loading' ? `加载 ${loadingProgress}%` : '重新播放'
+  const isChordTask = taskKind === 'chord'
 
   return (
     <section className={`play-card ${playing ? 'is-playing' : ''}`}>
@@ -45,10 +48,10 @@ export function PlayCard({
 
       <div className="play-card__content">
         <div>
-          <p className="play-card__kicker">听音辨和弦</p>
-          <h1>找出级数与和弦色彩</h1>
+          <p className="play-card__kicker">{isChordTask ? '听音辨和弦' : '听音辨级数'}</p>
+          <h1>{isChordTask ? '找出级数与和弦色彩' : '找出听到的级数'}</h1>
           <p className="play-card__description">
-            每个音的力度已随机化排布。当前难度按“{ruleSummary}”持续生成新题，题池没有上限；更高难度会继续复用到这些问题模型。
+            每个音的力度已随机化排布。当前难度按“{ruleSummary}”持续生成新题，题池没有上限。{isChordTask ? '更高难度的和弦题会包含更低难度的和弦题库。' : '这是和弦训练前的独立听辨能力，不会混入后续和弦题库。'}
           </p>
         </div>
 

@@ -1,6 +1,7 @@
 export type KeyMode = 'major' | 'minor'
 export type ModifierKind = 'add' | 'omit'
 export type QualityGroup = 'triad' | 'sus' | 'seventh' | 'sixth' | 'ninth' | 'eleventh' | 'thirteenth'
+export type TaskKind = 'note' | 'dyad' | 'chord'
 
 export interface KeyRoot {
   pitchClass: number
@@ -29,8 +30,15 @@ export interface ChordAnswer {
   modifiers: AnswerModifier[]
 }
 
+export interface ScaleAnswer {
+  degrees: number[]
+}
+
+export type QuestionAnswer = ChordAnswer | ScaleAnswer
+
 export interface DifficultyDefinition {
   id: number
+  taskKind: TaskKind
   title: string
   short: string
   description: string
@@ -39,9 +47,10 @@ export interface DifficultyDefinition {
   diatonicOnly?: boolean
 }
 
-export interface ChordQuestion {
+export interface TrainingQuestion {
   id: string
-  answer: ChordAnswer
+  taskKind: TaskKind
+  answer: QuestionAnswer
   midiNotes: number[]
   level: number
   keyRoot: number
@@ -53,26 +62,28 @@ export interface AttemptRecord {
   id: string
   timestamp: number
   correct: boolean
+  taskKind: TaskKind
   level: number
   keyRoot: number
   keyMode: KeyMode
   keyLabel: string
-  target: ChordAnswer
+  target: QuestionAnswer
   targetMidi: number[]
-  selected: ChordAnswer | null
+  selected: QuestionAnswer | null
   selectedMidi: number[]
 }
 
 export interface MistakeRecord {
   id: string
   timestamp: number
+  taskKind: TaskKind
   level: number
   keyRoot: number
   keyMode: KeyMode
   keyLabel: string
-  target: ChordAnswer
+  target: QuestionAnswer
   targetMidi: number[]
-  selected: ChordAnswer | null
+  selected: QuestionAnswer | null
   selectedMidi: number[]
 }
 
@@ -81,10 +92,11 @@ export interface LevelProgress {
   correct: number
   bestStreak: number
   currentStreak: number
+  recent: boolean[]
 }
 
 export interface AppStore {
-  version: 1
+  version: 2
   settings: {
     keyRoot: number
     keyMode: KeyMode

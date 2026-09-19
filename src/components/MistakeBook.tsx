@@ -1,4 +1,4 @@
-import { formatKeyLabel, getChordNoteNames, answerToLabel } from '../music'
+import { formatKeyLabel, getChordNoteNames, answerToLabel, shouldUseFlatsForKey } from '../music'
 import type { MistakeRecord } from '../types'
 
 interface MistakeBookProps {
@@ -58,14 +58,14 @@ export function MistakeBook({ open, mistakes, onClose, onPlay, onClear }: Mistak
             </div>
             <div className="mistake-list">
               {mistakes.map((mistake) => {
-                const useFlats = mistake.keyLabel.includes('b')
+                const useFlats = shouldUseFlatsForKey(mistake.keyRoot, mistake.keyMode)
                 return (
                   <article className="mistake-item" key={mistake.id}>
                     <button
                       type="button"
                       className="mistake-item__play"
                       onClick={() => onPlay(mistake.targetMidi)}
-                      aria-label={`复听 ${answerToLabel(mistake.target)}`}
+                      aria-label={`复听 ${answerToLabel(mistake.target, mistake.taskKind)}`}
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M8 5.5v13l10-6.5-10-6.5Z" />
@@ -73,8 +73,8 @@ export function MistakeBook({ open, mistakes, onClose, onPlay, onClear }: Mistak
                     </button>
                     <div className="mistake-item__body">
                       <div className="mistake-item__title">
-                        <strong>{answerToLabel(mistake.target)}</strong>
-                        <span>L{mistake.level}</span>
+                        <strong>{answerToLabel(mistake.target, mistake.taskKind)}</strong>
+                        <span>难度 {mistake.level}</span>
                       </div>
                       <p>
                         {formatKeyLabel(mistake.keyRoot, mistake.keyMode)} ·{' '}
@@ -82,7 +82,7 @@ export function MistakeBook({ open, mistakes, onClose, onPlay, onClear }: Mistak
                       </p>
                       <div className="mistake-item__meta">
                         <span>{formatTime(mistake.timestamp)}</span>
-                        {mistake.selected && <span>你的答案：{answerToLabel(mistake.selected)}</span>}
+                        {mistake.selected && <span>你的答案：{answerToLabel(mistake.selected, mistake.taskKind)}</span>}
                       </div>
                     </div>
                   </article>

@@ -365,11 +365,61 @@ main {
   margin-top: 3px;
   font-size: 0.86rem;
 }
+.unlock-notice {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 14px;
+  border: 1px solid #f0d5a8;
+  border-radius: 16px;
+  background: #fff8e8;
+  color: #76541f;
+}
+
+.unlock-notice strong {
+  display: block;
+  font-size: 0.82rem;
+}
+
+.unlock-notice p {
+  margin: 4px 0 0;
+  color: #977034;
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.unlock-notice > button:not(.unlock-notice__close) {
+  min-height: 40px;
+  margin-left: auto;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 10px;
+  background: #8a641f;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.unlock-notice__close {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid #eddaa9;
+  border-radius: 10px;
+  background: #fffdf7;
+  color: #9b7738;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
 
 .level-list {
   display: grid;
-  grid-template-columns: repeat(7, minmax(116px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 6px;
   width: 100%;
 }
 
@@ -403,7 +453,8 @@ main {
 }
 
 .level-card.is-locked {
-  opacity: 0.38;
+  opacity: 0.5;
+  cursor: help;
 }
 
 .level-card__number {
@@ -756,6 +807,13 @@ main {
   min-width: 0;
 }
 
+.answer-tray__hint {
+  display: block;
+  margin-top: 4px;
+  color: #8b9197;
+  font-size: 0.64rem;
+}
+
 .answer-tray__main > strong {
   display: block;
   overflow: hidden;
@@ -894,6 +952,10 @@ main {
 
 .feedback--correct .feedback__next {
   background: #148a63;
+}
+
+.feedback--wrong .feedback__next {
+  background: #ef6247;
 }
 
 .feedback--revealed .feedback__next {
@@ -1067,6 +1129,10 @@ main {
   gap: 12px;
 }
 
+.answer-panels.answer-panels--scale {
+  grid-template-columns: 1fr;
+}
+
 .answer-panel {
   display: flex;
   min-width: 0;
@@ -1120,6 +1186,15 @@ main {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 7px;
+}
+
+.degree-grid--scale {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.degree-grid--scale .degree-card {
+  min-height: 76px;
 }
 
 .degree-card {
@@ -1729,6 +1804,16 @@ main {
   .feedback__reveal {
     margin-left: 42px;
   }
+
+  .unlock-notice {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .unlock-notice > button:not(.unlock-notice__close) {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 @media (max-width: 520px) {
@@ -1811,6 +1896,10 @@ main {
 
   .quality-card span {
     font-size: 0.44rem;
+  }
+
+  .degree-grid--scale {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .modifier-grid {

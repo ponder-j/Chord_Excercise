@@ -1,5 +1,14 @@
 import { KEY_ROOTS, LEVELS, QUALITIES, getLevelDefinition, getQuality } from './data/levels'
-import type { AnswerModifier, ChordAnswer, ChordQuestion, KeyMode, ModifierKind } from './types'
+import type {
+  AnswerModifier,
+  ChordAnswer,
+  KeyMode,
+  ModifierKind,
+  QuestionAnswer,
+  ScaleAnswer,
+  TaskKind,
+  TrainingQuestion,
+} from './types'
 
 const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 const FLAT_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
@@ -17,6 +26,7 @@ const DIATONIC_SEVENTHS: Record<KeyMode, string[]> = {
   major: ['maj7', 'min7', 'min7', 'maj7', '7', 'min7', 'm7b5'],
   minor: ['min7', 'm7b5', 'maj7', 'min7', 'min7', 'maj7', '7'],
 }
+
 export const TARGET_MIN_MIDI = 48
 export const TARGET_MAX_MIDI = 83
 export const CURRENT_DIFFICULTY_WEIGHT = 0.6
@@ -133,10 +143,13 @@ export function normalizeAnswer(answer: ChordAnswer): ChordAnswer {
   }
 }
 
-export function answerKey(answer: ChordAnswer) {
-  const normalized = normalizeAnswer(answer)
+export function answerKey(answer: QuestionAnswer, taskKind: TaskKind) {
+  if (taskKind === 'note' || taskKind === 'dyad') {
+    return `${taskKind}|${(answer as ScaleAnswer).degrees.join(',')}`
+  }
+  const normalized = normalizeAnswer(answer as ChordAnswer)
   const mods = normalized.modifiers.map(modifierKey).join(',')
-  return `${normalized.degree}|${normalized.qualityId}|${mods}`
+  return `${taskKind}|${normalized.degree}|${normalized.qualityId}|${mods}`
 }
 
 export function chordPitchClasses(answer: ChordAnswer, keyRoot: number, mode: KeyMode) {
@@ -146,7 +159,7 @@ export function chordPitchClasses(answer: ChordAnswer, keyRoot: number, mode: Ke
     .filter((pitchClass, index, list) => list.indexOf(pitchClass) === index)
 }
 
-export function answerToMidi(answer: ChordAnswer, keyRoot: number, mode: KeyMode) {
+export function chordAnswerToMidi(answer: ChordAnswer, keyRoot: number, mode: KeyMode) {
   const rootMidi = getDegreeRootMidi(keyRoot, mode, answer.degree)
   return applyChordIntervals(getQuality(answer.qualityId).intervals, answer.modifiers)
     .map((semitone) => rootMidi + semitone)
@@ -155,13 +168,14 @@ export function answerToMidi(answer: ChordAnswer, keyRoot: number, mode: KeyMode
     .sort((a, b) => a - b)
 }
 
-export function modifiersAreApplicable(answer: ChordAnswer) {
-  let intervals = [...getQuality(answer.qualityId).intervals]
-  for (const modifier of normalizeAnswer(answer).modifiers) {
-    if (!canApplyModifier(intervals, modifier)) return false
-    intervals = applyChordIntervals(intervals, [modifier])
+export function answerToMidi(answer: QuestionAnswer, keyRoot: number, mode: KeyMode, taskKind: TaskKind) {
+  if (taskKind === 'note' || taskKind === 'dyad') {
+    return (answer as ScaleAnswer).degrees
+      .map((degree) => getDegreeRootMidi(keyRoot, mode, degree))
+      .filter((midi) => midi >= TARGET_MIN_MIDI && midi <= TARGET_MAX_MIDI)
+      .sort((a, b) => a - b)
   }
-  return true
+  return chordAnswerToMidi(answer as ChordAnswer, keyRoot, mode)
 }
 
 export function sameChordSound(a: ChordAnswer, b: ChordAnswer, keyRoot: number, mode: KeyMode) {
@@ -171,8 +185,29 @@ export function sameChordSound(a: ChordAnswer, b: ChordAnswer, keyRoot: number, 
   return left.length === right.length && left.every((value, index) => value === right[index])
 }
 
-export function answerToLabel(answer: ChordAnswer) {
-  const normalized = normalizeAnswer(answer)
+export function sameAnswer(
+  a: QuestionAnswer,
+  b: QuestionAnswer,
+  keyRoot: number,
+  mode: KeyMode,
+  taskKind: TaskKind,
+) {
+  if (taskKind === 'note' || taskKind === 'dyad') {
+    const left = [...(a as ScaleAnswer).degrees].sort((x, y) => x - y)
+    const right = [...(b as ScaleAnswer).degrees].sort((x, y) => x - y)
+    return left.length === right.length && left.every((value, index) => value === right[index])
+  }
+  return sameChordSound(a as ChordAnswer, b as ChordAnswer, keyRoot, mode)
+}
+
+export function answerToLabel(answer: QuestionAnswer, taskKind: TaskKind) {
+  if (taskKind === 'note') {
+    return `${(answer as ScaleAnswer).degrees[0]} 级`
+  }
+  if (taskKind === 'dyad') {
+    return `${(answer as ScaleAnswer).degrees.join(' + ')} 级`
+  }
+  const normalized = normalizeAnswer(answer as ChordAnswer)
   const quality = getQuality(normalized.qualityId)
   const modifierText = normalized.modifiers.map((modifier) => `${modifier.kind}${modifier.degree}`).join(' · ')
   return `${normalized.degree} · ${quality.label}${modifierText ? ` (${modifierText})` : ''}`
@@ -192,16 +227,17 @@ export function getAbsoluteNoteName(midi: number, keyRoot: number, mode: KeyMode
 }
 
 export function getQualityCardsForLevel(level: number) {
+  if (level < 3) return []
   const qualityIds = new Set<string>()
-  for (let currentLevel = 1; currentLevel <= level; currentLevel += 1) {
+  for (let currentLevel = 3; currentLevel <= level; currentLevel += 1) {
     getLevelDefinition(currentLevel).qualityIds.forEach((qualityId) => qualityIds.add(qualityId))
   }
   return [...qualityIds].map((qualityId) => getQuality(qualityId))
 }
 
 export function getDifficultyPoolWeights(level: number) {
-  if (level <= 1) return [{ level: 1, weight: 1 }]
-  const lowerLevels = Array.from({ length: level - 1 }, (_, index) => index + 1)
+  if (level <= 3) return [{ level: level <= 3 ? level : 1, weight: 1 }]
+  const lowerLevels = Array.from({ length: level - 3 }, (_, index) => index + 3)
   const lowerWeight = (1 - CURRENT_DIFFICULTY_WEIGHT) / lowerLevels.length
   return [
     { level, weight: CURRENT_DIFFICULTY_WEIGHT },
@@ -262,19 +298,65 @@ export function applyChordIntervals(baseIntervals: number[], modifiers: AnswerMo
   return intervals.filter((interval, index, list) => list.indexOf(interval) === index).sort((a, b) => a - b)
 }
 
-export function generateQuestion(level: number, keyRoot: number, mode: KeyMode): ChordQuestion {
+function modifiersAreApplicable(answer: ChordAnswer) {
+  let intervals = [...getQuality(answer.qualityId).intervals]
+  for (const modifier of normalizeAnswer(answer).modifiers) {
+    if (!canApplyModifier(intervals, modifier)) return false
+    intervals = applyChordIntervals(intervals, [modifier])
+  }
+  return true
+}
+
+function createQuestion(
+  level: number,
+  taskKind: TaskKind,
+  answer: QuestionAnswer,
+  keyRoot: number,
+  mode: KeyMode,
+): TrainingQuestion {
+  return {
+    id: uniqueId('question'),
+    taskKind,
+    answer,
+    midiNotes: answerToMidi(answer, keyRoot, mode, taskKind),
+    level,
+    keyRoot,
+    keyMode: mode,
+    createdAt: Date.now(),
+  }
+}
+
+function generateScaleQuestion(level: number, taskKind: 'note' | 'dyad', keyRoot: number, mode: KeyMode) {
+  let degrees: number[]
+
+  if (taskKind === 'note') {
+    degrees = [randomInt(1, 7)]
+  } else {
+    const first = randomInt(1, 7)
+    let second = randomInt(1, 6)
+    if (second >= first) second += 1
+    degrees = [first, second].sort((a, b) => a - b)
+  }
+
+  return createQuestion(level, taskKind, { degrees }, keyRoot, mode)
+}
+
+function generateChordQuestion(level: number, keyRoot: number, mode: KeyMode): TrainingQuestion {
   for (let attempt = 0; attempt < 80; attempt += 1) {
     const poolLevel = pickDifficultyPool(level)
     const definition = getLevelDefinition(poolLevel)
+    if (definition.taskKind !== 'chord') continue
+
     const diatonic = definition.diatonicOnly
-      ? (getLevelDiatonicQualities(poolLevel, mode).filter((item) => definition.qualityIds.includes(item.qualityId)))
+      ? getLevelDiatonicQualities(poolLevel, mode).filter((item) => definition.qualityIds.includes(item.qualityId))
       : null
-    const picked = diatonic && diatonic.length > 0
-      ? diatonic[randomInt(0, diatonic.length - 1)]
-      : {
-          degree: randomInt(1, 7),
-          qualityId: definition.qualityIds[randomInt(0, definition.qualityIds.length - 1)],
-        }
+    const picked =
+      diatonic && diatonic.length > 0
+        ? diatonic[randomInt(0, diatonic.length - 1)]
+        : {
+            degree: randomInt(1, 7),
+            qualityId: definition.qualityIds[randomInt(0, definition.qualityIds.length - 1)],
+          }
     const { degree, qualityId } = picked
     const quality = getQuality(qualityId)
     const modifiers: AnswerModifier[] = []
@@ -294,36 +376,27 @@ export function generateQuestion(level: number, keyRoot: number, mode: KeyMode):
     }
 
     const answer = normalizeAnswer({ degree, qualityId, modifiers })
-    const midiNotes = answerToMidi(answer, keyRoot, mode)
+    const midiNotes = chordAnswerToMidi(answer, keyRoot, mode)
     const pitchClasses = new Set(midiNotes.map((midi) => midi % 12))
 
     if (midiNotes.length >= 3 && midiNotes.length <= 7 && pitchClasses.size === midiNotes.length) {
-      return {
-        id: uniqueId('question'),
-        answer,
-        midiNotes,
-        level,
-        keyRoot,
-        keyMode: mode,
-        createdAt: Date.now(),
-      }
+      return createQuestion(level, 'chord', answer, keyRoot, mode)
     }
   }
 
-  const answer: ChordAnswer = { degree: 1, qualityId: 'maj', modifiers: [] }
-  return {
-    id: uniqueId('question'),
-    answer,
-    midiNotes: answerToMidi(answer, keyRoot, mode),
-    level,
-    keyRoot,
-    keyMode: mode,
-    createdAt: Date.now(),
-  }
+  const fallback: ChordAnswer = { degree: 1, qualityId: 'maj', modifiers: [] }
+  return createQuestion(level, 'chord', fallback, keyRoot, mode)
+}
+
+export function generateQuestion(level: number, keyRoot: number, mode: KeyMode): TrainingQuestion {
+  const definition = getLevelDefinition(level)
+  if (definition.taskKind === 'note') return generateScaleQuestion(level, 'note', keyRoot, mode)
+  if (definition.taskKind === 'dyad') return generateScaleQuestion(level, 'dyad', keyRoot, mode)
+  return generateChordQuestion(level, keyRoot, mode)
 }
 
 export function getLevelDiatonicQualities(level: number, mode: KeyMode) {
-  const qualityIds = level === 2 ? DIATONIC_SEVENTHS[mode] : DIATONIC_TRIADS[mode]
+  const qualityIds = level === 4 ? DIATONIC_SEVENTHS[mode] : DIATONIC_TRIADS[mode]
   return qualityIds.map((qualityId, index) => ({ degree: index + 1, qualityId }))
 }
 
