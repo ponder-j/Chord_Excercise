@@ -1,8 +1,10 @@
-import { LEVELS, QUALITIES, getLevelDefinition, getQuality } from './data/levels'
+import { KEY_ROOTS, LEVELS, QUALITIES, getLevelDefinition, getQuality } from './data/levels'
 import type { AnswerModifier, ChordAnswer, ChordQuestion, KeyMode, ModifierKind } from './types'
 
 const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 const FLAT_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
+const NOTE_LETTERS = ['C', 'D', 'E', 'F', 'G', 'A', 'B']
+const LETTER_PITCH_CLASSES = [0, 2, 4, 5, 7, 9, 11]
 const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11]
 const MINOR_SCALE = [0, 2, 3, 5, 7, 8, 10]
 
@@ -78,12 +80,30 @@ export function midiToPitchName(midi: number, useFlats = false) {
   return names[((midi % 12) + 12) % 12]
 }
 
-export function getDegreePitchName(keyRoot: number, mode: KeyMode, degree: number, useFlats: boolean) {
-  return midiToPitchName(getDegreeRootMidi(keyRoot, mode, degree), useFlats)
+export function getDegreePitchName(keyRoot: number, mode: KeyMode, degree: number) {
+  const tonic = KEY_ROOTS.find((root) => root.pitchClass === keyRoot) ?? KEY_ROOTS[0]
+  const tonicLetterIndex = NOTE_LETTERS.indexOf(tonic.label[0])
+  const degreeLetterIndex = (tonicLetterIndex + degree - 1) % NOTE_LETTERS.length
+  const interval = getScaleIntervals(mode)[degree - 1] ?? 0
+  const targetPitchClass = (keyRoot + interval) % 12
+  const naturalPitchClass = LETTER_PITCH_CLASSES[degreeLetterIndex]
+
+  let accidentalOffset = (targetPitchClass - naturalPitchClass) % 12
+  if (accidentalOffset > 6) accidentalOffset -= 12
+  if (accidentalOffset < -6) accidentalOffset += 12
+
+  const accidental =
+    accidentalOffset > 0
+      ? '#'.repeat(accidentalOffset)
+      : accidentalOffset < 0
+        ? 'b'.repeat(Math.abs(accidentalOffset))
+        : ''
+
+  return `${NOTE_LETTERS[degreeLetterIndex]}${accidental}`
 }
 
 export function formatKeyLabel(keyRoot: number, mode: KeyMode) {
-  const root = FLAT_NAMES[keyRoot]
+  const root = KEY_ROOTS.find((item) => item.pitchClass === keyRoot)?.label ?? FLAT_NAMES[keyRoot]
   return `${root}${mode === 'major' ? ' 大调' : ' 小调'}`
 }
 

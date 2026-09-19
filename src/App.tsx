@@ -117,7 +117,7 @@ function App() {
   const degreeNames = useMemo(
     () =>
       Array.from({ length: 7 }, (_, index) =>
-        getDegreePitchName(store.settings.keyRoot, store.settings.keyMode, index + 1, store.settings.keyMode === 'minor'),
+        getDegreePitchName(store.settings.keyRoot, store.settings.keyMode, index + 1),
       ),
     [store.settings.keyMode, store.settings.keyRoot],
   )
