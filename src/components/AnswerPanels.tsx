@@ -1,3 +1,4 @@
+import { QUALITY_GROUPS } from '../data/levels'
 import type { AnswerModifier, ModifierKind, QualityDefinition } from '../types'
 import { modifierKey } from '../music'
 
@@ -35,6 +36,10 @@ export function AnswerPanels({
   onRemoveModifier,
 }: AnswerPanelsProps) {
   const selectedModifierKeys = new Set(selectedModifiers.map(modifierKey))
+  const groupedQualities = QUALITY_GROUPS.map((group) => ({
+    ...group,
+    qualities: qualityCards.filter((quality) => quality.group === group.id),
+  })).filter((group) => group.qualities.length > 0)
 
   return (
     <div className="answer-panels">
@@ -76,19 +81,29 @@ export function AnswerPanels({
           <span className="answer-panel__caption">Quality</span>
         </div>
 
-        <div className="quality-grid">
-          {qualityCards.map((quality) => (
-            <button
-              key={quality.id}
-              type="button"
-              className={`quality-card ${qualityId === quality.id ? 'is-selected' : ''}`}
-              onClick={() => onSelectQuality(quality.id)}
-              disabled={disabled}
-              aria-pressed={qualityId === quality.id}
-            >
-              <strong>{quality.label}</strong>
-              <span>{quality.name}</span>
-            </button>
+        <div className="quality-groups">
+          {groupedQualities.map((group) => (
+            <div className="quality-group" key={group.id}>
+              <div className="quality-group__head">
+                <span>{group.label}</span>
+                <small>{group.hint}</small>
+              </div>
+              <div className="quality-group__grid">
+                {group.qualities.map((quality) => (
+                  <button
+                    key={quality.id}
+                    type="button"
+                    className={`quality-card ${qualityId === quality.id ? 'is-selected' : ''}`}
+                    onClick={() => onSelectQuality(quality.id)}
+                    disabled={disabled}
+                    aria-pressed={qualityId === quality.id}
+                  >
+                    <strong>{quality.label}</strong>
+                    <span>{quality.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </section>

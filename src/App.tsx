@@ -218,6 +218,12 @@ function App() {
     void playNotes(tonicIntervals.map((interval) => tonicRoot + interval))
   }
 
+  function handlePreviewAnswer() {
+    if (!selectedAnswer || selectedMidi.length === 0) return
+    playedQuestionRef.current = question.id
+    void playNotes(selectedMidi)
+  }
+
   function handleSelectDegree(value: number) {
     if (feedback?.type === 'correct' || feedback?.type === 'revealed') return
     setDegree(value)
@@ -457,13 +463,28 @@ function App() {
           )}
 
           <div className="submit-row">
-            <p>{hasAnswer ? '确认组合听起来与目标一致后再提交' : '先选择级数和和弦性质'}</p>
-            <button type="button" className="submit-button" onClick={handleSubmit} disabled={!hasAnswer || isLockedFeedback}>
-              提交答案
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m5 12 5 5L19 7" />
-              </svg>
-            </button>
+            <p>{hasAnswer ? '可先试听自己组合的音响，再提交答案' : '先选择级数和和弦性质'}</p>
+            <div className="submit-actions">
+              <button
+                type="button"
+                className="cheat-button"
+                onClick={handlePreviewAnswer}
+                disabled={!hasAnswer || isLockedFeedback}
+                title="试听当前组合，不计入答题记录"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 10v4h3l4 3V7l-4 3H5Z" />
+                  <path d="M16 9.5a4 4 0 0 1 0 5" />
+                </svg>
+                作弊试听
+              </button>
+              <button type="button" className="submit-button" onClick={handleSubmit} disabled={!hasAnswer || isLockedFeedback}>
+                提交答案
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m5 12 5 5L19 7" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <AnswerPanels

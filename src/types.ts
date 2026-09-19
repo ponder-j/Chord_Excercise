@@ -1,5 +1,6 @@
 export type KeyMode = 'major' | 'minor'
 export type ModifierKind = 'add' | 'omit'
+export type QualityGroup = 'triad' | 'sus' | 'seventh' | 'sixth' | 'ninth' | 'eleventh' | 'thirteenth'
 
 export interface KeyRoot {
   pitchClass: number
@@ -9,6 +10,7 @@ export interface KeyRoot {
 
 export interface QualityDefinition {
   id: string
+  group: QualityGroup
   label: string
   name: string
   intervals: number[]
