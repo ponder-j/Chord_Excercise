@@ -97,6 +97,9 @@ class PianoEngine {
     const piano = await this.ensureReady()
     const context = this.context
     if (!context) return []
+    if (context.state !== 'running') {
+      await context.resume()
+    }
 
     piano.stop()
     const now = context.currentTime + 0.035
